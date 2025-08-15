@@ -1,7 +1,3 @@
-// File: api/order-counter.js
-// Vercel serverless function to fetch real order count from Shopify Admin API.
-// Secure: reads token from environment variable; optional basic check for App Proxy origin.
-
 export default async function handler(req, res) {
   // Allow CORS requests from Shopify store
   res.setHeader('Access-Control-Allow-Origin', 'https://acetech.pk');
@@ -56,44 +52,42 @@ export default async function handler(req, res) {
     const data = await r.json();
     let orderCount = data.count;
 
-// Handle refunded orders - decrease the count if any order is refunded
-const refundedOrdersParams = new URLSearchParams();
-refundedOrdersParams.set('created_at_min', created_at_min);
-refundedOrdersParams.set('created_at_max', created_at_max);
-refundedOrdersParams.set('financial_status', 'refunded');  // Only refunded orders
+    // Handle refunded orders - decrease the count if any order is refunded
+    const refundedOrdersParams = new URLSearchParams();
+    refundedOrdersParams.set('created_at_min', created_at_min);
+    refundedOrdersParams.set('created_at_max', created_at_max);
+    refundedOrdersParams.set('payment_status', 'refunded');  // Only refunded orders
 
-const refundedOrdersUrl = `https://${shop}/admin/api/${version}/orders/count.json?${refundedOrdersParams.toString()}`;
-const refundedResponse = await fetch(refundedOrdersUrl, {
-  headers: {
-    'X-Shopify-Access-Token': token,
-    'Content-Type': 'application/json'
-  }
-});
-
-const refundedData = await refundedResponse.json();
-if (refundedData.count > 0) {
-  orderCount -= refundedData.count;  // Subtract refunded orders from the count
-}
-
-
-
-    // Handle paid or pending orders - only based on payment status
-    const paidOrPendingOrdersParams = new URLSearchParams();
-    paidOrPendingOrdersParams.set('created_at_min', created_at_min);
-    paidOrPendingOrdersParams.set('created_at_max', created_at_max);
-    paidOrPendingOrdersParams.set('financial_status', 'paid');  // Only paid orders
-
-    const paidOrPendingOrdersUrl = `https://${shop}/admin/api/${version}/orders/count.json?${paidOrPendingOrdersParams.toString()}`;
-    const paidOrPendingResponse = await fetch(paidOrPendingOrdersUrl, {
+    const refundedOrdersUrl = `https://${shop}/admin/api/${version}/orders/count.json?${refundedOrdersParams.toString()}`;
+    const refundedResponse = await fetch(refundedOrdersUrl, {
       headers: {
         'X-Shopify-Access-Token': token,
         'Content-Type': 'application/json'
       }
     });
 
-    const paidOrPendingData = await paidOrPendingResponse.json();
-    if (paidOrPendingData.count > 0) {
-      orderCount += paidOrPendingData.count;  // Add paid and pending orders to the count
+    const refundedData = await refundedResponse.json();
+    if (refundedData.count > 0) {
+      orderCount -= refundedData.count;  // Subtract refunded orders from the count
+    }
+
+    // Handle only "paid" orders (do not count pending)
+    const paidOrdersParams = new URLSearchParams();
+    paidOrdersParams.set('created_at_min', created_at_min);
+    paidOrdersParams.set('created_at_max', created_at_max);
+    paidOrdersParams.set('payment_status', 'paid');  // Only paid orders
+
+    const paidOrdersUrl = `https://${shop}/admin/api/${version}/orders/count.json?${paidOrdersParams.toString()}`;
+    const paidResponse = await fetch(paidOrdersUrl, {
+      headers: {
+        'X-Shopify-Access-Token': token,
+        'Content-Type': 'application/json'
+      }
+    });
+
+    const paidData = await paidResponse.json();
+    if (paidData.count > 0) {
+      orderCount += paidData.count;  // Add paid orders to the count
     }
 
     return res.status(200).json({ count: orderCount });
@@ -101,4 +95,3 @@ if (refundedData.count > 0) {
     return res.status(500).json({ error: 'Server error', details: e.message });
   }
 }
-
