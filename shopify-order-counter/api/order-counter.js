@@ -27,11 +27,10 @@ export default async function handler(req, res) {
   const created_at_min = '2025-08-14T00:00:00Z';
   const created_at_max = '2025-08-31T23:59:59Z';
 
-  // Shopify API call with date range and status filter (Only "paid" orders)
+  // Shopify API call with date range filter for orders
   const params = new URLSearchParams();
   params.set('created_at_min', created_at_min);
   params.set('created_at_max', created_at_max);
-  params.set('financial_status', 'paid');  // Only consider "paid" orders
 
   const version = process.env.SHOPIFY_API_VERSION || '2025-07';
   const url = `https://${shop}/admin/api/${version}/orders/count.json?${params.toString()}`;
@@ -57,30 +56,11 @@ export default async function handler(req, res) {
     const data = await r.json();
     let orderCount = data.count;
 
-    // Handle cancelled orders - decrease the count if any order is cancelled
-    const cancelledOrdersParams = new URLSearchParams();
-    cancelledOrdersParams.set('created_at_min', created_at_min);
-    cancelledOrdersParams.set('created_at_max', created_at_max);
-    cancelledOrdersParams.set('fulfillment_status', 'cancelled');
-
-    const cancelledOrdersUrl = `https://${shop}/admin/api/${version}/orders/count.json?${cancelledOrdersParams.toString()}`;
-    const cancelledResponse = await fetch(cancelledOrdersUrl, {
-      headers: {
-        'X-Shopify-Access-Token': token,
-        'Content-Type': 'application/json'
-      }
-    });
-
-    const cancelledData = await cancelledResponse.json();
-    if (cancelledData.count > 0) {
-      orderCount -= cancelledData.count;  // Subtract cancelled orders from the count
-    }
-
-    // Handle refunded orders - decrease the count if any order is refunded
+    // Handle orders with "refunded" payment status
     const refundedOrdersParams = new URLSearchParams();
     refundedOrdersParams.set('created_at_min', created_at_min);
     refundedOrdersParams.set('created_at_max', created_at_max);
-    refundedOrdersParams.set('financial_status', 'refunded');
+    refundedOrdersParams.set('financial_status', 'refunded');  // Only refunded orders
 
     const refundedOrdersUrl = `https://${shop}/admin/api/${version}/orders/count.json?${refundedOrdersParams.toString()}`;
     const refundedResponse = await fetch(refundedOrdersUrl, {
@@ -95,24 +75,25 @@ export default async function handler(req, res) {
       orderCount -= refundedData.count;  // Subtract refunded orders from the count
     }
 
-    // Ensure that completed orders (paid + fulfilled) are counted
-    const fulfilledOrdersParams = new URLSearchParams();
-    fulfilledOrdersParams.set('created_at_min', created_at_min);
-    fulfilledOrdersParams.set('created_at_max', created_at_max);
-    fulfilledOrdersParams.set('financial_status', 'paid');
-    fulfilledOrdersParams.set('fulfillment_status', 'fulfilled');
+    // Handle orders with "paid" or "payment pending" payment status and "fulfilled" or "unfulfilled" fulfillment status
+    const paidOrPendingOrdersParams = new URLSearchParams();
+    paidOrPendingOrdersParams.set('created_at_min', created_at_min);
+    paidOrPendingOrdersParams.set('created_at_max', created_at_max);
+    paidOrPendingOrdersParams.set('financial_status', 'paid');  // Only paid orders
+    paidOrPendingOrdersParams.set('fulfillment_status', 'fulfilled');  // Only fulfilled orders
+    paidOrPendingOrdersParams.set('fulfillment_status', 'unfulfilled');  // Include unfulfilled as well
 
-    const fulfilledOrdersUrl = `https://${shop}/admin/api/${version}/orders/count.json?${fulfilledOrdersParams.toString()}`;
-    const fulfilledResponse = await fetch(fulfilledOrdersUrl, {
+    const paidOrPendingOrdersUrl = `https://${shop}/admin/api/${version}/orders/count.json?${paidOrPendingOrdersParams.toString()}`;
+    const paidOrPendingResponse = await fetch(paidOrPendingOrdersUrl, {
       headers: {
         'X-Shopify-Access-Token': token,
         'Content-Type': 'application/json'
       }
     });
 
-    const fulfilledData = await fulfilledResponse.json();
-    if (fulfilledData.count > 0) {
-      orderCount += fulfilledData.count;  // Add fulfilled orders back to the count
+    const paidOrPendingData = await paidOrPendingResponse.json();
+    if (paidOrPendingData.count > 0) {
+      orderCount += paidOrPendingData.count;  // Add paid and fulfilled orders to the count
     }
 
     return res.status(200).json({ count: orderCount });
