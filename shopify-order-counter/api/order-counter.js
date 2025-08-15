@@ -23,9 +23,9 @@ export default async function handler(req, res) {
     });
   }
 
-  // Date range filters: from 14th August to 31st August
+  // Date range filters: from 14th August to 31st September
   const created_at_min = '2025-08-14T00:00:00Z';
-  const created_at_max = '2025-08-31T23:59:59Z';
+  const created_at_max = '2025-09-31T23:59:59Z';
 
   // Shopify API call with date range and status filter
   const params = new URLSearchParams();
