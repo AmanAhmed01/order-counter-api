@@ -76,6 +76,25 @@ export default async function handler(req, res) {
       orderCount -= cancelledData.count;  // Subtract cancelled orders from the count
     }
 
+    // Handle refunded orders - decrease the count if any order is refunded
+    const refundedOrdersParams = new URLSearchParams();
+    refundedOrdersParams.set('created_at_min', created_at_min);
+    refundedOrdersParams.set('created_at_max', created_at_max);
+    refundedOrdersParams.set('financial_status', 'refunded');
+
+    const refundedOrdersUrl = `https://${shop}/admin/api/${version}/orders/count.json?${refundedOrdersParams.toString()}`;
+    const refundedResponse = await fetch(refundedOrdersUrl, {
+      headers: {
+        'X-Shopify-Access-Token': token,
+        'Content-Type': 'application/json'
+      }
+    });
+
+    const refundedData = await refundedResponse.json();
+    if (refundedData.count > 0) {
+      orderCount -= refundedData.count;  // Subtract refunded orders from the count
+    }
+
     // Ensure that completed orders (paid + fulfilled) are counted
     const fulfilledOrdersParams = new URLSearchParams();
     fulfilledOrdersParams.set('created_at_min', created_at_min);
@@ -101,4 +120,3 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: 'Server error', details: e.message });
   }
 }
-
