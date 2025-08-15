@@ -56,7 +56,7 @@ export default async function handler(req, res) {
     const data = await r.json();
     let orderCount = data.count;
 
-    // Handle orders with "refunded" payment status
+    // Handle refunded orders - decrease the count if any order is refunded
     const refundedOrdersParams = new URLSearchParams();
     refundedOrdersParams.set('created_at_min', created_at_min);
     refundedOrdersParams.set('created_at_max', created_at_max);
@@ -75,13 +75,12 @@ export default async function handler(req, res) {
       orderCount -= refundedData.count;  // Subtract refunded orders from the count
     }
 
-    // Handle orders with "paid" or "payment pending" payment status and "fulfilled" or "unfulfilled" fulfillment status
+    // Handle paid or pending orders - only based on payment status
     const paidOrPendingOrdersParams = new URLSearchParams();
     paidOrPendingOrdersParams.set('created_at_min', created_at_min);
     paidOrPendingOrdersParams.set('created_at_max', created_at_max);
     paidOrPendingOrdersParams.set('financial_status', 'paid');  // Only paid orders
-    paidOrPendingOrdersParams.set('fulfillment_status', 'fulfilled');  // Only fulfilled orders
-    paidOrPendingOrdersParams.set('fulfillment_status', 'unfulfilled');  // Include unfulfilled as well
+    paidOrPendingOrdersParams.set('financial_status', 'pending');  // Only pending orders
 
     const paidOrPendingOrdersUrl = `https://${shop}/admin/api/${version}/orders/count.json?${paidOrPendingOrdersParams.toString()}`;
     const paidOrPendingResponse = await fetch(paidOrPendingOrdersUrl, {
@@ -93,7 +92,7 @@ export default async function handler(req, res) {
 
     const paidOrPendingData = await paidOrPendingResponse.json();
     if (paidOrPendingData.count > 0) {
-      orderCount += paidOrPendingData.count;  // Add paid and fulfilled orders to the count
+      orderCount += paidOrPendingData.count;  // Add paid and pending orders to the count
     }
 
     return res.status(200).json({ count: orderCount });
@@ -101,3 +100,4 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: 'Server error', details: e.message });
   }
 }
+
