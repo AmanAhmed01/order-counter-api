@@ -23,11 +23,11 @@ export default async function handler(req, res) {
     });
   }
 
-  // Date range filters: from 14th August to 31st September
+  // Date range filters: from 14th August to 31st August
   const created_at_min = '2025-08-14T00:00:00Z';
-  const created_at_max = '2025-09-31T23:59:59Z';
+  const created_at_max = '2025-08-31T23:59:59Z';
 
-  // Shopify API call with date range and status filter
+  // Shopify API call with date range and status filter (Only "paid" orders)
   const params = new URLSearchParams();
   params.set('created_at_min', created_at_min);
   params.set('created_at_max', created_at_max);
@@ -74,6 +74,26 @@ export default async function handler(req, res) {
     const cancelledData = await cancelledResponse.json();
     if (cancelledData.count > 0) {
       orderCount -= cancelledData.count;  // Subtract cancelled orders from the count
+    }
+
+    // Ensure that completed orders (paid + fulfilled) are counted
+    const fulfilledOrdersParams = new URLSearchParams();
+    fulfilledOrdersParams.set('created_at_min', created_at_min);
+    fulfilledOrdersParams.set('created_at_max', created_at_max);
+    fulfilledOrdersParams.set('financial_status', 'paid');
+    fulfilledOrdersParams.set('fulfillment_status', 'fulfilled');
+
+    const fulfilledOrdersUrl = `https://${shop}/admin/api/${version}/orders/count.json?${fulfilledOrdersParams.toString()}`;
+    const fulfilledResponse = await fetch(fulfilledOrdersUrl, {
+      headers: {
+        'X-Shopify-Access-Token': token,
+        'Content-Type': 'application/json'
+      }
+    });
+
+    const fulfilledData = await fulfilledResponse.json();
+    if (fulfilledData.count > 0) {
+      orderCount += fulfilledData.count;  // Add fulfilled orders back to the count
     }
 
     return res.status(200).json({ count: orderCount });
