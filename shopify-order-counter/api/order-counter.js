@@ -82,7 +82,6 @@ if (refundedData.count > 0) {
     paidOrPendingOrdersParams.set('created_at_min', created_at_min);
     paidOrPendingOrdersParams.set('created_at_max', created_at_max);
     paidOrPendingOrdersParams.set('financial_status', 'paid');  // Only paid orders
-    paidOrPendingOrdersParams.set('financial_status', 'pending');  // Only pending orders
 
     const paidOrPendingOrdersUrl = `https://${shop}/admin/api/${version}/orders/count.json?${paidOrPendingOrdersParams.toString()}`;
     const paidOrPendingResponse = await fetch(paidOrPendingOrdersUrl, {
