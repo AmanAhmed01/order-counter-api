@@ -3,10 +3,10 @@
 // Secure: reads token from environment variable; optional basic check for App Proxy origin.
 
 export default async function handler(req, res) {
-  // Allow CORS requests from your Shopify store
-  res.setHeader('Access-Control-Allow-Origin', 'https://acetech.pk');  // Only allow your domain
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');  // Allow specific methods
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');  // Allow headers like Content-Type
+  // Allow CORS requests from Shopify store
+  res.setHeader('Access-Control-Allow-Origin', 'https://acetech.pk');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
   // Cache response at the edge to reduce API calls
   res.setHeader('Cache-Control', 's-maxage=15, stale-while-revalidate=30');
@@ -14,7 +14,7 @@ export default async function handler(req, res) {
   const shop = process.env.SHOPIFY_STORE_DOMAIN; 
   const token = process.env.SHOPIFY_ADMIN_API_TOKEN;
 
-  // Check if the environment variables are set
+  // Check if environment variables are missing
   if (!shop || !token) {
     return res.status(500).json({
       error: `Missing environment variables: ${
@@ -23,15 +23,31 @@ export default async function handler(req, res) {
     });
   }
 
-  const url = `https://${shop}/admin/api/2025-07/orders/count.json`;
+  // Date range filters: from 14th August to 31st August
+  const created_at_min = '2025-08-14T00:00:00Z';
+  const created_at_max = '2025-08-31T23:59:59Z';
+
+  // Shopify API call with date range and status filter
+  const params = new URLSearchParams();
+  params.set('created_at_min', created_at_min);
+  params.set('created_at_max', created_at_max);
+  params.set('financial_status', 'paid');  // Only consider "paid" orders
+
+  const version = process.env.SHOPIFY_API_VERSION || '2025-07';
+  const url = `https://${shop}/admin/api/${version}/orders/count.json?${params.toString()}`;
 
   try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8000);
+
     const r = await fetch(url, {
       headers: {
         'X-Shopify-Access-Token': token,
         'Content-Type': 'application/json'
-      }
+      },
+      signal: controller.signal
     });
+    clearTimeout(timeout);
 
     if (!r.ok) {
       const text = await r.text();
@@ -39,8 +55,30 @@ export default async function handler(req, res) {
     }
 
     const data = await r.json();
-    return res.status(200).json({ count: data.count });
+    let orderCount = data.count;
+
+    // Handle cancelled orders - decrease the count if any order is cancelled
+    const cancelledOrdersParams = new URLSearchParams();
+    cancelledOrdersParams.set('created_at_min', created_at_min);
+    cancelledOrdersParams.set('created_at_max', created_at_max);
+    cancelledOrdersParams.set('fulfillment_status', 'cancelled');
+
+    const cancelledOrdersUrl = `https://${shop}/admin/api/${version}/orders/count.json?${cancelledOrdersParams.toString()}`;
+    const cancelledResponse = await fetch(cancelledOrdersUrl, {
+      headers: {
+        'X-Shopify-Access-Token': token,
+        'Content-Type': 'application/json'
+      }
+    });
+
+    const cancelledData = await cancelledResponse.json();
+    if (cancelledData.count > 0) {
+      orderCount -= cancelledData.count;  // Subtract cancelled orders from the count
+    }
+
+    return res.status(200).json({ count: orderCount });
   } catch (e) {
     return res.status(500).json({ error: 'Server error', details: e.message });
   }
 }
+
