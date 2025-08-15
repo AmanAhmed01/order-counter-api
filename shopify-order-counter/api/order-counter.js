@@ -56,24 +56,25 @@ export default async function handler(req, res) {
     const data = await r.json();
     let orderCount = data.count;
 
-    // Handle refunded orders - decrease the count if any order is refunded
-    const refundedOrdersParams = new URLSearchParams();
-    refundedOrdersParams.set('created_at_min', created_at_min);
-    refundedOrdersParams.set('created_at_max', created_at_max);
-    refundedOrdersParams.set('financial_status', 'refunded');  // Only refunded orders
+// Handle refunded orders - decrease the count if any order is refunded
+const refundedOrdersParams = new URLSearchParams();
+refundedOrdersParams.set('created_at_min', created_at_min);
+refundedOrdersParams.set('created_at_max', created_at_max);
+refundedOrdersParams.set('financial_status', 'refunded');  // Only refunded orders
 
-    const refundedOrdersUrl = `https://${shop}/admin/api/${version}/orders/count.json?${refundedOrdersParams.toString()}`;
-    const refundedResponse = await fetch(refundedOrdersUrl, {
-      headers: {
-        'X-Shopify-Access-Token': token,
-        'Content-Type': 'application/json'
-      }
-    });
+const refundedOrdersUrl = `https://${shop}/admin/api/${version}/orders/count.json?${refundedOrdersParams.toString()}`;
+const refundedResponse = await fetch(refundedOrdersUrl, {
+  headers: {
+    'X-Shopify-Access-Token': token,
+    'Content-Type': 'application/json'
+  }
+});
 
-    const refundedData = await refundedResponse.json();
-    if (refundedData.count > 0) {
-      orderCount -= refundedData.count;  // Subtract refunded orders from the count
-    }
+const refundedData = await refundedResponse.json();
+if (refundedData.count > 0) {
+  orderCount -= refundedData.count;  // Subtract refunded orders from the count
+}
+
 
     // Handle paid or pending orders - only based on payment status
     const paidOrPendingOrdersParams = new URLSearchParams();
