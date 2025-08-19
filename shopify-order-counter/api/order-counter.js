@@ -19,9 +19,17 @@ export default async function handler(req, res) {
     });
   }
 
-  // Define the start date as 14th August and end date as 31st September
-  const created_at_min = '2025-08-14T00:00:00Z';  // Start date: 14th August
-  const created_at_max = '2025-09-30T23:59:59Z'; // End date: 30th September
+  // Adjust date for Pakistan Time Zone (UTC +5)
+  const pstOffset = 5 * 60 * 60 * 1000;  // 5 hours in milliseconds
+  const pakistanDateMin = new Date('2025-08-14T00:00:00+05:00');  // 14th August 2025 PST
+  const pakistanDateMax = new Date('2025-09-30T23:59:59+05:00');  // 30th September 2025 PST
+
+  // Convert PST to UTC by subtracting 5 hours
+  const created_at_min = new Date(pakistanDateMin.getTime() - pstOffset).toISOString();
+  const created_at_max = new Date(pakistanDateMax.getTime() - pstOffset).toISOString();
+
+  console.log("Created At Min (UTC):", created_at_min);
+  console.log("Created At Max (UTC):", created_at_max);
 
   // Shopify API call with date range filter for orders
   const params = new URLSearchParams();
@@ -51,9 +59,6 @@ export default async function handler(req, res) {
 
     const data = await r.json();
     let orderCount = data.count;
-
-    // Log for debugging: Show the fetched order count
-    console.log("Total orders fetched:", orderCount);
 
     // Handle refunded orders - decrease the count if any order is refunded
     const refundedOrdersParams = new URLSearchParams();
