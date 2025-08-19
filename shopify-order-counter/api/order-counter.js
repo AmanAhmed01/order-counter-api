@@ -92,26 +92,30 @@ export default async function handler(req, res) {
     // Add paid orders to the total count
     orderCount += paidData.count;
 
-    // Exclude refunded or cancelled orders (no need to add these to count)
-    const refundedOrdersParams = new URLSearchParams();
-    refundedOrdersParams.set('created_at_min', created_at_min);
-    refundedOrdersParams.set('created_at_max', created_at_max);
-    refundedOrdersParams.set('payment_status', 'refunded');  // Only refunded orders
+    // Exclude refunded or cancelled or voided orders (no need to add these to count)
+    const excludedOrdersParams = new URLSearchParams();
+    excludedOrdersParams.set('created_at_min', created_at_min);
+    excludedOrdersParams.set('created_at_max', created_at_max);
 
-    const refundedOrdersUrl = `https://${shop}/admin/api/${version}/orders/count.json?${refundedOrdersParams.toString()}`;
-    const refundedResponse = await fetch(refundedOrdersUrl, {
+    // Filter out refunded, cancelled, and voided orders
+    excludedOrdersParams.set('payment_status', 'refunded');  // Only refunded orders
+    excludedOrdersParams.set('payment_status', 'voided');    // Only voided orders
+    excludedOrdersParams.set('financial_status', 'cancelled'); // Only cancelled orders
+
+    const excludedOrdersUrl = `https://${shop}/admin/api/${version}/orders/count.json?${excludedOrdersParams.toString()}`;
+    const excludedResponse = await fetch(excludedOrdersUrl, {
       headers: {
         'X-Shopify-Access-Token': token,
         'Content-Type': 'application/json'
       }
     });
 
-    const refundedData = await refundedResponse.json();
-    console.log("Refunded orders count:", refundedData.count);
+    const excludedData = await excludedResponse.json();
+    console.log("Refunded, Cancelled, or Voided orders count:", excludedData.count);
 
-    // Subtract refunded orders from the total count
-    if (refundedData.count > 0) {
-      orderCount -= refundedData.count;
+    // Subtract refunded/cancelled/voided orders from the total count
+    if (excludedData.count > 0) {
+      orderCount -= excludedData.count;
     }
 
     // Return the final order count after adjustments
