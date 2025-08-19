@@ -21,7 +21,7 @@ export default async function handler(req, res) {
 
   // Date range filters: from 14th August to 31st August
   const created_at_min = '2025-08-14T00:00:00Z';
-  const created_at_max = '2025-08-31T23:59:59Z';
+  const created_at_max = '2025-09-31T23:59:59Z';
 
   // Shopify API call with date range filter for orders
   const params = new URLSearchParams();
