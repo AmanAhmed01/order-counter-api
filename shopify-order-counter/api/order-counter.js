@@ -19,9 +19,9 @@ export default async function handler(req, res) {
     });
   }
 
-  // Date range filters: from 14th August to 31st August
-  const created_at_min = '2025-08-14T00:00:00Z';
-  const created_at_max = '2025-09-31T23:59:59Z';
+  // Define the start date as 14th August and end date as 31st September
+  const created_at_min = '2025-08-14T00:00:00Z';  // Start date: 14th August
+  const created_at_max = '2025-09-30T23:59:59Z'; // End date: 30th September
 
   // Shopify API call with date range filter for orders
   const params = new URLSearchParams();
@@ -52,6 +52,9 @@ export default async function handler(req, res) {
     const data = await r.json();
     let orderCount = data.count;
 
+    // Log for debugging: Show the fetched order count
+    console.log("Total orders fetched:", orderCount);
+
     // Handle refunded orders - decrease the count if any order is refunded
     const refundedOrdersParams = new URLSearchParams();
     refundedOrdersParams.set('created_at_min', created_at_min);
@@ -67,6 +70,8 @@ export default async function handler(req, res) {
     });
 
     const refundedData = await refundedResponse.json();
+    console.log("Refunded orders count:", refundedData.count);
+    
     if (refundedData.count > 0) {
       orderCount -= refundedData.count;  // Subtract refunded orders from the count
     }
@@ -86,10 +91,13 @@ export default async function handler(req, res) {
     });
 
     const paidData = await paidResponse.json();
+    console.log("Paid orders count:", paidData.count);
+    
     if (paidData.count > 0) {
       orderCount += paidData.count;  // Add paid orders to the count
     }
 
+    // Return the final order count after adjustments
     return res.status(200).json({ count: orderCount });
   } catch (e) {
     return res.status(500).json({ error: 'Server error', details: e.message });
