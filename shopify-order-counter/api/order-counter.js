@@ -19,17 +19,9 @@ export default async function handler(req, res) {
     });
   }
 
-  // Adjust date for Pakistan Time Zone (UTC +5)
-  const pstOffset = 5 * 60 * 60 * 1000;  // 5 hours in milliseconds
-  const pakistanDateMin = new Date('2025-08-14T00:00:00+05:00');  // 14th August 2025 PST
-  const pakistanDateMax = new Date('2025-09-30T23:59:59+05:00');  // 30th September 2025 PST
-
-  // Convert PST to UTC by subtracting 5 hours
-  const created_at_min = new Date(pakistanDateMin.getTime() - pstOffset).toISOString();
-  const created_at_max = new Date(pakistanDateMax.getTime() - pstOffset).toISOString();
-
-  console.log("Created At Min (UTC):", created_at_min);
-  console.log("Created At Max (UTC):", created_at_max);
+  // Define the start date as 14th August and end date as 31st September
+  const created_at_min = '2025-08-14T00:00:00Z';  // Start date: 14th August
+  const created_at_max = '2025-09-30T23:59:59Z'; // End date: 30th September
 
   // Shopify API call with date range filter for orders
   const params = new URLSearchParams();
@@ -60,28 +52,27 @@ export default async function handler(req, res) {
     const data = await r.json();
     let orderCount = data.count;
 
-    // Handle refunded orders - decrease the count if any order is refunded
-    const refundedOrdersParams = new URLSearchParams();
-    refundedOrdersParams.set('created_at_min', created_at_min);
-    refundedOrdersParams.set('created_at_max', created_at_max);
-    refundedOrdersParams.set('payment_status', 'refunded');  // Only refunded orders
+    // Handle only "payment pending" orders (we'll include these)
+    const pendingOrdersParams = new URLSearchParams();
+    pendingOrdersParams.set('created_at_min', created_at_min);
+    pendingOrdersParams.set('created_at_max', created_at_max);
+    pendingOrdersParams.set('payment_status', 'pending');  // Only pending orders
 
-    const refundedOrdersUrl = `https://${shop}/admin/api/${version}/orders/count.json?${refundedOrdersParams.toString()}`;
-    const refundedResponse = await fetch(refundedOrdersUrl, {
+    const pendingOrdersUrl = `https://${shop}/admin/api/${version}/orders/count.json?${pendingOrdersParams.toString()}`;
+    const pendingResponse = await fetch(pendingOrdersUrl, {
       headers: {
         'X-Shopify-Access-Token': token,
         'Content-Type': 'application/json'
       }
     });
 
-    const refundedData = await refundedResponse.json();
-    console.log("Refunded orders count:", refundedData.count);
-    
-    if (refundedData.count > 0) {
-      orderCount -= refundedData.count;  // Subtract refunded orders from the count
-    }
+    const pendingData = await pendingResponse.json();
+    console.log("Pending orders count:", pendingData.count);
 
-    // Handle only "paid" orders (do not count pending)
+    // Add pending orders to the total count
+    orderCount += pendingData.count;
+
+    // Handle only "paid" orders (we'll include these)
     const paidOrdersParams = new URLSearchParams();
     paidOrdersParams.set('created_at_min', created_at_min);
     paidOrdersParams.set('created_at_max', created_at_max);
@@ -97,9 +88,30 @@ export default async function handler(req, res) {
 
     const paidData = await paidResponse.json();
     console.log("Paid orders count:", paidData.count);
-    
-    if (paidData.count > 0) {
-      orderCount += paidData.count;  // Add paid orders to the count
+
+    // Add paid orders to the total count
+    orderCount += paidData.count;
+
+    // Exclude refunded or cancelled orders (no need to add these to count)
+    const refundedOrdersParams = new URLSearchParams();
+    refundedOrdersParams.set('created_at_min', created_at_min);
+    refundedOrdersParams.set('created_at_max', created_at_max);
+    refundedOrdersParams.set('payment_status', 'refunded');  // Only refunded orders
+
+    const refundedOrdersUrl = `https://${shop}/admin/api/${version}/orders/count.json?${refundedOrdersParams.toString()}`;
+    const refundedResponse = await fetch(refundedOrdersUrl, {
+      headers: {
+        'X-Shopify-Access-Token': token,
+        'Content-Type': 'application/json'
+      }
+    });
+
+    const refundedData = await refundedResponse.json();
+    console.log("Refunded orders count:", refundedData.count);
+
+    // Subtract refunded orders from the total count
+    if (refundedData.count > 0) {
+      orderCount -= refundedData.count;
     }
 
     // Return the final order count after adjustments
