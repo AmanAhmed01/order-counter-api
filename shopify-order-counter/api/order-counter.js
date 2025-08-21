@@ -1,4 +1,5 @@
 export default async function handler(req, res) {
+  // CORS settings
   res.setHeader('Access-Control-Allow-Origin', 'https://acetech.pk');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -6,41 +7,44 @@ export default async function handler(req, res) {
 
   const shop = process.env.SHOPIFY_STORE_DOMAIN;
   const token = process.env.SHOPIFY_ADMIN_API_TOKEN;
-  const version = process.env.SHOPIFY_API_VERSION || '2025-07';
 
   if (!shop || !token) {
-    return res.status(500).json({ error: "Missing environment variables" });
+    return res.status(500).json({
+      error: `Missing environment variables: ${
+        !shop ? "SHOPIFY_STORE_DOMAIN" : ""
+      } ${!token ? "SHOPIFY_ADMIN_API_TOKEN" : ""}`.trim()
+    });
   }
 
-  const created_at_min = '2025-08-14T00:00:00Z';
-  const created_at_max = '2025-09-30T23:59:59Z';
+  // Date Range
+  const startDate = "2025-08-14T00:00:00Z";
+  const endDate = "2025-09-30T23:59:59Z";
 
-  async function getOrderCount(status) {
-    const url = `https://${shop}/admin/api/${version}/orders/count.json?created_at_min=${created_at_min}&created_at_max=${created_at_max}&payment_status=${status}`;
-    const response = await fetch(url, {
+  // Orders API
+  const url = `https://${shop}/admin/api/2025-07/orders.json?status=any&created_at_min=${startDate}&created_at_max=${endDate}`;
+
+  try {
+    const r = await fetch(url, {
       headers: {
         'X-Shopify-Access-Token': token,
         'Content-Type': 'application/json'
       }
     });
-    const data = await response.json();
-    console.log(`${status} orders:`, data.count);
-    return data.count || 0;
-  }
 
-  try {
-    const paid = await getOrderCount('paid');
-    const pending = await getOrderCount('pending');
-    const refunded = await getOrderCount('refunded');
-    const voided = await getOrderCount('voided');
-    const cancelled = await getOrderCount('cancelled');
+    if (!r.ok) {
+      const text = await r.text();
+      return res.status(r.status).json({ error: 'Shopify API error', details: text });
+    }
 
-    let orderCount = paid + pending;
-    orderCount -= (refunded + voided + cancelled);
+    const data = await r.json();
 
-    console.log("Final order count:", orderCount);
+    // Filter Orders: Sirf Paid aur Pending
+    const validOrders = data.orders.filter(order =>
+      ["paid", "pending"].includes(order.financial_status)
+    );
 
-    return res.status(200).json({ count: orderCount });
+    return res.status(200).json({ count: validOrders.length });
+
   } catch (e) {
     return res.status(500).json({ error: 'Server error', details: e.message });
   }
