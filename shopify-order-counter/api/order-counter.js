@@ -15,8 +15,8 @@ export default async function handler(req, res) {
   const created_at_min = '2025-08-14T00:00:00Z';
   const created_at_max = '2025-09-30T23:59:59Z';
 
-  async function getOrderCount(financial_status) {
-    const url = `https://${shop}/admin/api/${version}/orders/count.json?created_at_min=${created_at_min}&created_at_max=${created_at_max}&financial_status=${financial_status}`;
+  async function getOrderCount(status) {
+    const url = `https://${shop}/admin/api/${version}/orders/count.json?created_at_min=${created_at_min}&created_at_max=${created_at_max}&payment_status=${status}`;
     const response = await fetch(url, {
       headers: {
         'X-Shopify-Access-Token': token,
@@ -24,20 +24,21 @@ export default async function handler(req, res) {
       }
     });
     const data = await response.json();
+    console.log(`${status} orders:`, data.count);
     return data.count || 0;
   }
 
   try {
-    // Get counts for each status separately
     const paid = await getOrderCount('paid');
     const pending = await getOrderCount('pending');
     const refunded = await getOrderCount('refunded');
     const voided = await getOrderCount('voided');
     const cancelled = await getOrderCount('cancelled');
 
-    // Final calculation
     let orderCount = paid + pending;
     orderCount -= (refunded + voided + cancelled);
+
+    console.log("Final order count:", orderCount);
 
     return res.status(200).json({ count: orderCount });
   } catch (e) {
