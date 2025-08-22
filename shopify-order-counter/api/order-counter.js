@@ -38,10 +38,12 @@ export default async function handler(req, res) {
 
     const data = await r.json();
 
-    // Filter Orders: Sirf Paid aur Pending
-    const validOrders = data.orders.filter(order =>
-      ["paid", "pending"].includes(order.financial_status)
-    );
+    // Filter Orders: Paid or Pending only & tag "daraz" not allowed
+    const validOrders = data.orders.filter(order => {
+      const isValidStatus = ["paid", "pending"].includes(order.financial_status);
+      const hasDarazTag = order.tags && order.tags.toLowerCase().includes("daraz");
+      return isValidStatus && !hasDarazTag;
+    });
 
     return res.status(200).json({ count: validOrders.length });
 
