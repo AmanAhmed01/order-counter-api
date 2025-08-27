@@ -3,7 +3,7 @@ export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', 'https://acetech.pk');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-  res.setHeader('Cache-Control', 's-maxage=15, stale-while-revalidate=30');
+  res.setHeader('Cache-Control', 's-maxage=15, Xstale-while-revalidate=30');
 
   const shop = process.env.SHOPIFY_STORE_DOMAIN;
   const token = process.env.SHOPIFY_ADMIN_API_TOKEN;
@@ -45,7 +45,15 @@ export default async function handler(req, res) {
       return isValidStatus && !hasDarazTag;
     });
 
-    return res.status(200).json({ count: validOrders.length });
+    // Calculate total quantity sold
+    let totalUnits = 0;
+    validOrders.forEach(order => {
+      order.line_items.forEach(item => {
+        totalUnits += item.quantity;
+      });
+    });
+
+    return res.status(200).json({ count: totalUnits });
 
   } catch (e) {
     return res.status(500).json({ error: 'Server error', details: e.message });
