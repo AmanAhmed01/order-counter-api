@@ -1,5 +1,5 @@
 export default async function handler(req, res) {
-  // CORS
+  // CORS settings
   res.setHeader('Access-Control-Allow-Origin', 'https://acetech.pk');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -10,67 +10,62 @@ export default async function handler(req, res) {
 
   if (!shop || !token) {
     return res.status(500).json({
-      error: `Missing environment variables: ${!shop ? "SHOPIFY_STORE_DOMAIN" : ""} ${!token ? "SHOPIFY_ADMIN_API_TOKEN" : ""}`.trim()
+      error: `Missing environment variables: ${
+        !shop ? "SHOPIFY_STORE_DOMAIN " : ""
+      }${!token ? "SHOPIFY_ADMIN_API_TOKEN" : ""}`.trim(),
     });
   }
 
+  // Date Range: last 60 days
+  const now = new Date();
+  const past = new Date();
+  past.setDate(past.getDate() - 60);
+
+  const startDate = past.toISOString();
+  const endDate = now.toISOString();
+
+  // Orders API (use current valid API version)
+  const url = `https://${shop}/admin/api/2024-07/orders.json?status=any&created_at_min=${startDate}&created_at_max=${endDate}`;
+
   try {
-    // ✅ Step 1: Get all product IDs from Accessories collection
-    const accessoriesCollectionId = "284540600397"; // <-- yahan apna collection ID daalo
-    const accessoriesUrl = `https://${shop}/admin/api/2025-07/collections/${accessoriesCollectionId}/products.json?limit=250`;
-
-    const accRes = await fetch(accessoriesUrl, {
+    const r = await fetch(url, {
       headers: {
         'X-Shopify-Access-Token': token,
-        'Content-Type': 'application/json'
-      }
-    });
-
-    if (!accRes.ok) {
-      const text = await accRes.text();
-      return res.status(accRes.status).json({ error: 'Accessories API error', details: text });
-    }
-
-    const accessoriesData = await accRes.json();
-    const accessoriesIds = new Set(accessoriesData.products.map(p => p.id));
-
-    // ✅ Step 2: Fetch Orders
-    const startDate = "2025-08-14T00:00:00Z";
-    const endDate = "2025-09-30T23:59:59Z";
-    const ordersUrl = `https://${shop}/admin/api/2025-07/orders.json?status=any&created_at_min=${startDate}&created_at_max=${endDate}`;
-
-    const r = await fetch(ordersUrl, {
-      headers: {
-        'X-Shopify-Access-Token': token,
-        'Content-Type': 'application/json'
-      }
+        'Content-Type': 'application/json',
+      },
     });
 
     if (!r.ok) {
       const text = await r.text();
-      return res.status(r.status).json({ error: 'Shopify Orders API error', details: text });
+      return res.status(r.status).json({ error: 'Shopify API error', details: text });
     }
 
     const data = await r.json();
 
-    // ✅ Step 3: Filter valid orders (exclude daraz + unpaid)
+    // Filter Orders: Paid / Pending / Authorized
     const validOrders = data.orders.filter(order => {
-      const isValidStatus = ["paid", "pending"].includes(order.financial_status);
+      const isValidStatus = ["paid", "pending", "authorized"].includes(order.financial_status);
       const hasDarazTag = order.tags && order.tags.toLowerCase().includes("daraz");
       return isValidStatus && !hasDarazTag;
     });
 
-    // ✅ Step 4: Count units excluding Accessories
+    // Calculate total quantity
     let totalUnits = 0;
+    let orderIds = [];
     validOrders.forEach(order => {
+      orderIds.push(order.id);
       order.line_items.forEach(item => {
-        if (!accessoriesIds.has(item.product_id)) {
-          totalUnits += item.quantity;
-        }
+        totalUnits += item.quantity;
       });
     });
 
-    return res.status(200).json({ count: totalUnits });
+    // Debug output
+    return res.status(200).json({
+      ordersFound: data.orders.length,
+      validOrders: validOrders.length,
+      orderIds: orderIds,
+      count: totalUnits,
+    });
 
   } catch (e) {
     return res.status(500).json({ error: 'Server error', details: e.message });
