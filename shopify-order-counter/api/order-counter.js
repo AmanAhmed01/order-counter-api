@@ -24,7 +24,7 @@ export default async function handler(req, res) {
   const startDate = past.toISOString();
   const endDate = now.toISOString();
 
-  // Orders API (use current valid API version)
+  // Orders API
   const url = `https://${shop}/admin/api/2024-07/orders.json?status=any&created_at_min=${startDate}&created_at_max=${endDate}`;
 
   try {
@@ -49,21 +49,37 @@ export default async function handler(req, res) {
       return isValidStatus && !hasDarazTag;
     });
 
-    // Calculate total quantity
+    // Accessories collection handle (skip accessories products only)
     let totalUnits = 0;
-    let orderIds = [];
-    validOrders.forEach(order => {
-      orderIds.push(order.id);
-      order.line_items.forEach(item => {
-        totalUnits += item.quantity;
-      });
-    });
+    let skippedUnits = 0;
 
-    // Debug output
+    for (const order of validOrders) {
+      for (const item of order.line_items) {
+        const collectionsUrl = `https://${shop}/admin/api/2024-07/products/${item.product_id}/collections.json`;
+        const cRes = await fetch(collectionsUrl, {
+          headers: {
+            'X-Shopify-Access-Token': token,
+            'Content-Type': 'application/json',
+          },
+        });
+        const collections = await cRes.json();
+
+        const isAccessories = collections.custom_collections?.some(c =>
+          c.title.toLowerCase().includes("accessories")
+        );
+
+        if (!isAccessories) {
+          totalUnits += item.quantity;
+        } else {
+          skippedUnits += item.quantity;
+        }
+      }
+    }
+
     return res.status(200).json({
       ordersFound: data.orders.length,
       validOrders: validOrders.length,
-      orderIds: orderIds,
+      skippedUnits,
       count: totalUnits,
     });
 
